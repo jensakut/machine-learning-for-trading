@@ -27,3 +27,9 @@ There are several notebooks that guide you through the data sourcing process:
 
 In addition, instructions to obtain data sources for specific applications are provided in the relevant directories and notebooks. 
 
+# Crypto Data
+
+use the enumerated notebooks to create the crypto.h5 dataset 
+
+useful links 
+download https://www.kaggle.com/tencars/392-crypto-currency-pairs-at-minute-resolution and add to subfolder /crypto_1min/

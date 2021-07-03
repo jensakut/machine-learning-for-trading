@@ -24,7 +24,7 @@ def get_backtest_data(predictions='lasso/predictions'):
                   .rename(columns=lambda x: x.replace('adj_', ''))
                   .swaplevel(axis=0))
 
-    with pd.HDFStore(PROJECT_DIR / '07_linear_models/data.h5') as store:
+    with pd.HDFStore(PROJECT_DIR / '07_linear_models/data_5min.h5') as store:
         print(store.info())
         predictions = store[predictions]
 

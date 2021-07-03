@@ -32,7 +32,7 @@ def parse_html(html):
 
 
 # Start selenium and click through pages until reach end
-# store results by iteratively appending to csv file
+# store results_5min by iteratively appending to csv file
 driver = webdriver.Firefox()
 url = "https://www.opentable.com/new-york-restaurant-listings"
 driver.get(url)
@@ -43,14 +43,14 @@ while True:
     if new_data.empty:
         break
     if page == 0:
-        new_data.to_csv('results.csv', index=False)
+        new_data.to_csv('results_5min.csv', index=False)
     elif page > 0:
-        new_data.to_csv('results.csv', index=False, header=None, mode='a')
+        new_data.to_csv('results_5min.csv', index=False, header=None, mode='a')
     page += 1
     collected += len(new_data)
     print(f'Page: {page} | Downloaded: {collected}')
     driver.find_element_by_link_text('Next').click()
 
 driver.close()
-restaurants = pd.read_csv('results.csv')
+restaurants = pd.read_csv('results_5min.csv')
 print(restaurants)

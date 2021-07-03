@@ -1,4 +1,4 @@
-name: ml4t
+name: ml4t-free
 channels:
   - ml4t
   - conda-forge
@@ -18,6 +18,8 @@ dependencies:
   - catboost
   - colorlover
   - conda
+  - cudatoolkit=11.2.*
+  - cudnn=8.1.*
   - empyrical-reloaded
   - ffmpeg
   - gensim<4.0
@@ -71,9 +73,6 @@ dependencies:
   - statsmodels
   - sympy
   - ta-lib
-  - tensorboard
-  - tensorflow
-  - tensorflow-datasets
   - termcolor
   - textacy
   - textblob
@@ -93,3 +92,4 @@ dependencies:
       - livelossplot
       - pymdptoolbox
       - PyPortfolioOpt
+      - tensorflow

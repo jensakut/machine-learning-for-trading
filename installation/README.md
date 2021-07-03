@@ -65,7 +65,7 @@ See also [here](https://towardsdatascience.com/getting-started-with-python-envir
 If you want to create a new environment with the latest library versions as of whenever you read this, run
 
 ```bash
-conda env create -f installation/ml4t-base.yml
+mamba env create -f installation/ml4t-base.yml
 ```
 
 ### Activate conda environment

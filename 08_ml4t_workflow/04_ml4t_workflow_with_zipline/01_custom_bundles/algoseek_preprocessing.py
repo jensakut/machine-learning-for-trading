@@ -43,7 +43,7 @@ def read_sqlite(table, con):
 
 
 def get_equities():
-    nasdaq100 = pd.read_hdf(data_path / 'data.h5', '1min_trades')
+    nasdaq100 = pd.read_hdf(data_path / 'data_5min.h5', '1min_trades')
 
     equities_con = sqlite3.connect(equities_db_path.as_posix())
     equities = read_sqlite('equity_symbol_mappings', equities_con)
@@ -95,7 +95,7 @@ def get_splits():
 def get_ohlcv_by_ticker():
     equities = pd.read_hdf('algoseek.h5', 'equities')
     col_dict = {'first': 'open', 'last': 'close'}
-    nasdaq100 = (pd.read_hdf(data_path / 'data.h5', '1min_trades')
+    nasdaq100 = (pd.read_hdf(data_path / 'data_5min.h5', '1min_trades')
                  .loc[idx[equities.symbol, :], :]
                  .rename(columns=col_dict))
     print(nasdaq100.info())

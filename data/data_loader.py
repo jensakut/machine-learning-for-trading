@@ -2,6 +2,9 @@ import warnings
 from datetime import time
 from glob import glob
 
+from talib import RSI
+from tqdm import tqdm
+
 from utils import reduce_footprint
 
 warnings.filterwarnings('ignore')
@@ -39,12 +42,12 @@ def downsample_and_shift(prices, timeframe, level='ticker', d_shift=30):
     while t < t_max:
         offset = f'{t}Min'
         print(f"offset {offset}")
-        price = pd.concat([prices['open'].unstack(level=level).resample(timeframe, offset=offset).first(),
-                           prices['high'].unstack(level=level).resample(timeframe, offset=offset).max(),
-                           prices['low'].unstack(level=level).resample(timeframe, offset=offset).min(),
-                           prices['close'].unstack(level=level).resample(timeframe, offset=offset).last(),
-                           prices['volume'].unstack(level=level).resample(timeframe, offset=offset).sum(min_count=1), ],
-                          keys=['open', 'high', 'low', 'close', 'volume'], axis=1).stack(level=level, dropna=True)
+        price = pd.concat([prices['open'].unstack(level=level).resample(timeframe, offset=offset, label='right', closed='right').first(),
+                           prices['high'].unstack(level=level).resample(timeframe, offset=offset, label='right', closed='right').max(),
+                           prices['low'].unstack(level=level).resample(timeframe, offset=offset, label='right', closed='right').min(),
+                           prices['close'].unstack(level=level).resample(timeframe, offset=offset, label='right', closed='right').last(),
+                           prices['volume'].unstack(level=level).resample(timeframe, offset=offset, label='right', closed='right').sum(min_count=1)],
+                           keys=['open', 'high', 'low', 'close', 'volume'], axis=1).stack(level=level, dropna=True)
         # if t > 0:
         #    price.reset_index(level='ticker', inplace=True)
         #    price.ticker += f'-{t}Min'
@@ -66,15 +69,15 @@ def downsample_and_shift(prices, timeframe, level='ticker', d_shift=30):
     return prices_df
 
 
-def downsample(prices, timeframe, level='ticker'):
-    prices = pd.concat([prices['open'].unstack(level=level).resample(timeframe).first(),
-                        prices['high'].unstack(level=level).resample(timeframe).max(),
-                        prices['low'].unstack(level=level).resample(timeframe).min(),
-                        prices['close'].unstack(level=level).resample(timeframe).last(),
-                        prices['volume'].unstack(level=level).resample(timeframe).sum(), ],
+def downsample(prices, timeframe, level):
+    resampled = pd.concat([prices['open'].unstack(level=level).resample(timeframe, label='right', closed='right').first(),
+                        prices['high'].unstack(level=level).resample(timeframe, label='right', closed='right').max(),
+                        prices['low'].unstack(level=level).resample(timeframe, label='right', closed='right').min(),
+                        prices['close'].unstack(level=level).resample(timeframe, label='right', closed='right').last(),
+                        prices['volume'].unstack(level=level).resample(timeframe, label='right', closed='right').sum(min_count=1), ],
                        keys=['open', 'high', 'low', 'close', 'volume'], axis=1).stack(level=[level], dropna=True)
-    prices.dropna(inplace=True)
-    return prices
+    resampled.dropna(inplace=True)
+    return resampled
 
 """
 def data_cacher(params):
@@ -136,11 +139,13 @@ def data_loader(timeframe='60Min',
                 min_observation_years=1,
                 drop_level=True,
                 exclude_stablecoins=True,
-                cut=True, reduce_size=True,
+                cut=True,
+                n_min_tickers=0,
+                reduce_size=True,
                 downsampleshift=False,
                 d_shift=30,
                 load_f32=True,
-                join_sector=True,
+                join_sector=False,
                 join_sectors=False):
 
     # categorical index for efficiency, but have to be dropped for storage
@@ -149,8 +154,8 @@ def data_loader(timeframe='60Min',
 
     # load data from disk
     prices = pd.read_feather(prices_path).set_index(multiindex_prices)
-    crypto_marketcap = pd.read_feather('../data/crypto/crypto_marketcap.feather').set_index(multiindex_market)
-    cat_df = pd.read_feather('../data/crypto/cat_df.feather').set_index(multiindex_market)
+    crypto_marketcap = pd.read_feather('../data/crypto/crypto_marketcap.ftr').set_index(multiindex_market)
+    cat_df = pd.read_feather('../data/crypto/cat_df.ftr').set_index(multiindex_market)
 
     # remove levels if not needed
     if drop_level:
@@ -176,21 +181,21 @@ def data_loader(timeframe='60Min',
         raise NotImplementedError
     """
 
-    # assume prices are 5 min Frequency
-    # TODO assert
     if min_observation_years > 0:
         min_nobs = int(365 * 24 * 60 / minutes_per_base_frequency * min_observation_years)
         nobs = prices.groupby(level='ticker').size()
         keep = nobs[nobs > min_nobs].index
         prices = prices.loc[(slice(None), keep, slice(None)), :]
-        num_tickers = prices.index.get_level_values('ticker').nunique()
 
-    if cut and min_observation_years > 0:
+    # TODO cut to a minimum amount of tickers instead of cutting to no NAN
+    if cut or n_min_tickers > 0:
         # cut timeframes so that all tickers are available and unstacking doesnt produce new nan
-        min_number_tickers = num_tickers
+        if n_min_tickers == 0:
+            num_tickers = prices.index.get_level_values('ticker').nunique()
+            min_number_tickers = num_tickers
+        else:
+            min_number_tickers = n_min_tickers
         prices = prices.unstack('ticker').dropna(thresh=min_number_tickers * 5).stack('ticker')
-    elif cut and min_observation_years < 0:
-        raise NotImplementedError  # does not make sense?
 
     # exclude stablecoins via categories
     if exclude_stablecoins:
@@ -205,27 +210,29 @@ def data_loader(timeframe='60Min',
     cat_df = cat_df.loc[shared, :]
     prices = prices.loc[(slice(None), shared), :]
 
-    assert cat_df.shape[0] == crypto_marketcap.shape[0]
-    assert prices.index.get_level_values('ticker').nunique() == cat_df.shape[0]
-    assert prices.unstack('date').shape[0] == crypto_marketcap.shape[0], cat_df.shape[0]
-    assert crypto_marketcap.shape[0] == cat_df.shape[0]
+    # assert cat_df.shape[0] == crypto_marketcap.shape[0]
+    # assert prices.index.get_level_values('ticker').nunique() == cat_df.shape[0]
+    # assert prices.unstack('date').shape[0] == crypto_marketcap.shape[0], cat_df.shape[0]
+    # assert crypto_marketcap.shape[0] == cat_df.shape[0]
 
     # compute intense operations after cutting down prices.. also ticker changes to simplify the augmented data
     if downsampleshift:
         if drop_level:
-            prices = downsample_and_shift(prices, timeframe,
+            prices = downsample_and_shift(prices=prices, timeframe=timeframe,
                                           level='ticker', d_shift=d_shift)
             prices = prices.reorder_levels(['date', 'offset', 'ticker'])
         else:
             raise NotImplementedError
-            """ does not work, don't know why.. 
-            prices = downsample_and_shift(prices, timeframe,
-                                          level='ticker', d_shift=d_shift)
-            prices.reset_index().set_index(['date', 'offset', 'ticker', 'symbol', 'base'])
-            """
+            ## does not work, don't know why..
+            #prices = downsample_and_shift(prices, timeframe,
+            #                              level='ticker', d_shift=d_shift)
+            #prices.reset_index().set_index(['date', 'offset', 'ticker', 'symbol', 'base'])
+
     else:
         # downsample prices to timeframe
-        prices = downsample(prices, timeframe)
+        #
+        prices = downsample(prices, timeframe, level='ticker')
+        prices = prices.reorder_levels(['date', 'ticker'])
 
     # only allow sectors on main sector row which have a minimum count
     min_freq = 3
@@ -251,15 +258,21 @@ def data_loader(timeframe='60Min',
 
 if __name__ == "__main__":
     print("start")
+
+    glevel=['ticker', 'offset'][0]
+    print(f"glevel {glevel}")
+    dss = False
+
     params = {'timeframe': 'D',
               'minutes_per_base_frequency': 12*60,
               'prices_path': '../data/crypto/prices_12H.feather',
               'min_observation_years': 5,
               'drop_level': True,
               'exclude_stablecoins': True,
-              'cut': True,
+              'cut': False,
+              'n_min_tickers': 2,
               'reduce_size': True,
-              'downsampleshift': True,
+              'downsampleshift': dss,
               'd_shift': 12*60,
               'load_f32': True,
               'join_sector': False,
@@ -268,7 +281,10 @@ if __name__ == "__main__":
     #prices, metadata, categories = data_cacher(params)
 
     print("load comparison")
-    prices2, metadata2, categories2 = data_loader(**params)
+    prices, metadata, categories = data_loader(**params)
+
+    print(prices.groupby(glevel).close.describe())
+    # prices2['rsi'] = prices.groupby(level='ticker', dropna=False).close.apply(RSI)
 
     #prices3, metadata3, categories3 = data_cacher(params)
     """

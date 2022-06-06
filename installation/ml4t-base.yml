@@ -8,6 +8,8 @@ channels:
   - ranaroussi
   - powerai
   - fastai
+  - jiayi_anaconda
+  - districtdatalabs
 dependencies:
   - arch
   - alphalens-reloaded
@@ -43,7 +45,8 @@ dependencies:
   - nltk
   - numpy
   - opencv-python-headless
-  - pandas
+  - openpyxl
+  - pandas<1.3
   - pandas-datareader
   - pillow
   - pip
